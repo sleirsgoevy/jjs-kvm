@@ -9,18 +9,23 @@ kernel.elf: kernel.o
 rmboot.img: rmboot.asm
 	yasm rmboot.asm -o rmboot.img
 
+dist: all
+	rm -rf dist
+	mkdir dist
+	cp kernel.elf rmboot.img dist
+
 run: all
 	fuser -k `which /usr/bin/qemu-system-i386` || true
-	qemu-system-i386 -m 4096 -hda rmboot.img -device loader,file=kernel.elf -device loader,file=../bundle.bin,addr=0x1000000,force-raw=on -debugcon file:/dev/stdout -s
+	qemu-system-i386 -m 4096 -drive file=rmboot.img,format=raw -device loader,file=kernel.elf -device loader,file=../bundle.bin,addr=0x1000000,force-raw=on -debugcon file:/dev/stdout -s
 
 debug: all
 	fuser -k `which /usr/bin/qemu-system-i386` || true
-	qemu-system-i386 -m 4096 -hda rmboot.img -device loader,file=kernel.elf -device loader,file=../bundle.bin,addr=0x1000000,force-raw=on -debugcon file:/dev/stdout -s -S &
+	qemu-system-i386 -m 4096 -drive file=rmboot.img,format=raw -device loader,file=kernel.elf -device loader,file=../bundle.bin,addr=0x1000000,force-raw=on -debugcon file:/dev/stdout -s -S &
 	gdb -x gdbinit ../kernel/kernel.elf
 
 kvm: all
 	fuser -k `which /usr/bin/qemu-system-i386` || true
-	qemu-system-i386 -m 4096 -hda rmboot.img -device loader,file=kernel.elf -device loader,file=../bundle.bin,addr=0x1000000,force-raw=on -debugcon file:/dev/stdout -s -enable-kvm
+	qemu-system-i386 -m 4096 -drive file=rmboot.img,format=raw -device loader,file=kernel.elf -device loader,file=../bundle.bin,addr=0x1000000,force-raw=on -debugcon file:/dev/stdout -s -enable-kvm
 
 clean:
-	rm -f rmboot.img kernel.o kernel.elf
+	rm -rf rmboot.img kernel.o kernel.elf dist

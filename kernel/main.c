@@ -59,6 +59,7 @@ int main()
         char* data = (char*)output_txt->data;
         for(int i = 0; i < output_txt->sz; i++)
             debug_putc(data[i]);
+        bundle->tests[iteration].outcome = status;
         pop_paging();
     }
     return 0;

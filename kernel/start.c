@@ -7,6 +7,7 @@
 #include "main.h"
 #include "alloc.h"
 #include "timer.h"
+#include "done.h"
 
 void _start()
 {
@@ -27,6 +28,7 @@ void _start()
     init_timer();
     debug_puts("init_timer(): ok\n");
     debug_puts("calling main()...\n");
-    main();
+    int status = main();
     debug_puts("main() returned\n");
+    done(status);
 }

@@ -16,6 +16,7 @@ dd 65536 ;ml (=256M)
 dd input_txt
 dd output_txt
 dd test1_input_txt ;fs
+dd 0 ;outcome
 
 ; test #2
 dq 1000000 ;tl
@@ -23,6 +24,7 @@ dd 65536 ;ml (=256M)
 dd input_txt
 dd output_txt
 dd test2_input_txt ;fs
+dd 0 ;outcome
 
 test1_input_txt:
 dd input_txt ;filename

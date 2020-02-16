@@ -8,6 +8,7 @@ struct test
     const char* input_txt;
     const char* output_txt;
     struct file* fs;
+    volatile int outcome; // guest to host communication, should be left zero
 };
 
 struct bundle

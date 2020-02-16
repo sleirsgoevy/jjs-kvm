@@ -2,9 +2,13 @@
 
 #ifdef NDEBUG
 
+#undef debug_putc
 void debug_putc(char c){}
+#undef debug_puts
 void debug_puts(char* s){}
-void debug_putn(long long n, int base){}
+#undef debug_putn
+void debug_putn(unsigned long long n, int base){}
+#undef debug_putns
 void debug_putns(long long n, int base){}
 
 #else

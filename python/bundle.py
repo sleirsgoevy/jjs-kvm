@@ -27,8 +27,10 @@ class _BundleBuilder:
         if l != None:
             self.labelrefs[self.pc] = l
         self.write(b'\0\0\0\0')
-    def set_label(self, l):
+    def set_label(self, l=None):
+        if l is None: l = self.get_label()
         self.labels[l] = self.pc
+        return l
     def get_label(self):
         ans = self.counter
         self.counter += 1
@@ -53,6 +55,7 @@ class Test:
         self.input_txt = input_txt
         self.output_txt = output_txt
         self.files = list(files)
+        self.outcome_addr = None
     def _dump(self, dumper, tgt_l):
         l = dumper.get_label()
         dumper.write(self.tl.to_bytes(8, 'little'))
@@ -60,6 +63,8 @@ class Test:
         dumper.write_label(dumper.set_label_string(self.input_txt))
         dumper.write_label(dumper.set_label_string(self.output_txt))
         dumper.write_label(tgt_l)
+        self.outcome_addr = dumper.set_label()
+        dumper.write(bytes(4)) #outcome
 
 class File:
     READONLY = 0
@@ -69,10 +74,14 @@ class File:
         self.access = access
         self.data = data
         self.sz = sz
+        self.sz_addr = None
+        self.data_addr = None
     def _dump(self, dumper, tgt_l):
         dumper.write_label(dumper.set_label_string(self.name))
         dumper.write(self.access.to_bytes(4, 'little'))
-        dumper.write_label(dumper.set_label_bytes(dumper.get_label(), self.data, len(self.data)))
+        self.data_addr = dumper.set_label_bytes(dumper.get_label(), self.data, len(self.data))
+        dumper.write_label(self.data_addr)
+        self.sz_addr = dumper.set_label()
         dumper.write(self.sz.to_bytes(4, 'little'))
         dumper.write(len(self.data).to_bytes(4, 'little'))
         dumper.write_label(tgt_l)
@@ -87,6 +96,7 @@ class Bundle:
         rootfs_l = dumper.get_label() if self.files else None
         dumper.write_label(rootfs_l)
         dumper.write_label(dumper.set_label_string(self.exe))
+        all_files = sum((i.files for i in self.tests), self.files)
         fs_ls = []
         for i in self.tests:
             if i.files:
@@ -112,9 +122,14 @@ class Bundle:
         if self.files:
             dumper.set_label(fs_l)
             self.files[-1]._dump(dumper, None)
+        dumper.resolve()
+        for i in all_files:
+            i.sz_addr = dumper.labels[i.sz_addr] - 0xc1000000
+            i.data_addr = dumper.labels[i.data_addr] - 0xc1000000
+        for i in self.tests:
+            i.outcome_addr = dumper.labels[i.outcome_addr] - 0xc1000000
     def dump(self):
         dumper = _BundleBuilder()
         self._dump(dumper)
-        dumper.resolve()
         ans = dumper.out.getvalue()
         return len(ans).to_bytes(4, 'little')+ans
