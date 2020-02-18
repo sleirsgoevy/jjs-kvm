@@ -25,7 +25,7 @@ def pack_fs(d, p, fszlim):
         assert os.readlink(d) == '/dev/stdout'
         return [bundle.File(p[:-1], bundle.File.READWRITE, bytes(fszlim), 0)]
     elif os.path.isdir(d):
-        return sum((pack_fs(d+'/'+i, p+i+'/', fszlim) for i in os.listdir(d)), [])
+        return sum((pack_fs(d+'/'+i, p+i+'/', fszlim) for i in os.listdir(d) if not i.startswith('.')), [])
     else:
         data = open(d, 'rb').read()
         return [bundle.File(p[:-1], bundle.File.READONLY, data, len(data))]
