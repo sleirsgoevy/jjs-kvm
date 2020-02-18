@@ -1,4 +1,4 @@
-import bundle, os, signal, pack, sys, ctypes
+import bundle, os.path, signal, pack, sys, ctypes
 
 def memfd_create(name, flags):
     if isinstance(name, str): name = name.encode('utf-8')
@@ -27,7 +27,10 @@ def do_run(bundle):
         os.dup2(fd5, 5)
         dist_dir = os.environ.get("DIST_DIR", os.path.split(os.path.abspath(__file__))[0])
         os.chdir('/')
-        os.execlp("qemu-system-i386", "qemu-system-i386", "-m", "4096", "-enable-kvm", "-drive", "file=%s/rmboot.img,format=raw"%dist_dir, "-device", "loader,file=/dev/fd/4,addr=0x1000000,force-raw=on", "-device", "loader,file=%s/kernel.elf"%dist_dir, "-debugcon", "file:/dev/fd/3", "-monitor", "stdio", "-nographic", "-serial", "null", "-s")
+        bios = ()
+        if os.path.exists(dist_dir+'/bios.bin'):
+            bios = ('-bios', dist_dir+'/bios.bin')
+        os.execlp("qemu-system-i386", "qemu-system-i386", "-m", "4096", "-enable-kvm", "-drive", "file=%s/rmboot.img,format=raw"%dist_dir, "-device", "loader,file=/dev/fd/4,addr=0x1000000,force-raw=on", "-device", "loader,file=%s/kernel.elf"%dist_dir, "-debugcon", "file:/dev/fd/3", "-monitor", "stdio", "-nographic", "-serial", "null", "-s", *bios)
     for i in (fd0, fd1, fd3, fd4, fd5): os.close(i)
     b = b''
     while not b.endswith(b'\n'): b += os.read(done_fd, 1)
