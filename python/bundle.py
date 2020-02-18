@@ -79,7 +79,7 @@ class File:
     def _dump(self, dumper, tgt_l):
         dumper.write_label(dumper.set_label_string(self.name))
         dumper.write(self.access.to_bytes(4, 'little'))
-        self.data_addr = dumper.set_label_bytes(dumper.get_label(), self.data, len(self.data))
+        self.data_addr = dumper.set_label_bytes(dumper.get_label(), self.data, 4)
         dumper.write_label(self.data_addr)
         self.sz_addr = dumper.set_label()
         dumper.write(self.sz.to_bytes(4, 'little'))
