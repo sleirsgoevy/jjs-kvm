@@ -57,7 +57,7 @@ class Test:
         self.files = list(files)
         self.outcome_addr = None
     def _dump(self, dumper, tgt_l):
-        l = dumper.get_label()
+        #l = dumper.get_label()
         dumper.write(self.tl.to_bytes(8, 'little'))
         dumper.write(self.ml.to_bytes(4, 'little'))
         dumper.write_label(dumper.set_label_string(self.input_txt))
