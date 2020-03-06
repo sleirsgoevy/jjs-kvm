@@ -67,7 +67,7 @@ pub fn pack_dir(base_dir: &String) -> bundle::Bundle {
         let input_txt = input_txt.to_str().unwrap();
         let output_txt = std::fs::read_link(&(base_dir.clone()+"/"+&dir+"/output")).unwrap();
         let output_txt = output_txt.to_str().unwrap();
-        tests.push(bundle::Test::new(tl, ml, input_txt, output_txt, testfs));
+        tests.push(bundle::Test::new(tl, ml, input_txt.to_string(), output_txt.to_string(), testfs));
     }
     bundle::Bundle::new(rootfs, exe, tests)
 }
