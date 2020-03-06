@@ -2,26 +2,6 @@ use std::string::String;
 use std::vec::Vec;
 use std::collections::HashMap;
 
-fn u32_to_bytes(arg: u32) -> [u8; 4] {
-    let mut x = arg;
-    let mut ans = [0 as u8; 4];
-    for i in 0..4 {
-        ans[i as usize] = (x & 0xff) as u8;
-        x >>= 8;
-    }
-    ans
-}
-
-fn u64_to_bytes(arg: u64) -> [u8; 8] {
-    let mut x = arg;
-    let mut ans = [0 as u8; 8];
-    for i in 0..8 {
-        ans[i as usize] = (x & 0xff) as u8;
-        x >>= 8;
-    }
-    ans
-}
-
 #[derive(Debug)]
 enum Label {
     Addr(u32),
@@ -74,10 +54,10 @@ impl BundleBuilder {
     pub fn align(&mut self, q: u32) {
         BundleBuilder::_align(&mut self.out, q);
     }
-    fn _write(out: &mut Vec<u8>, data: &Vec<u8>) {
+    fn _write(out: &mut Vec<u8>, data: &[u8]) {
         out.extend(data);
     }
-    pub fn write(&mut self, data: &Vec<u8>) {
+    pub fn write(&mut self, data: &[u8]) {
         BundleBuilder::_write(&mut self.out, data);
     }
     pub fn write_label(&mut self, lbl: u32) {
@@ -124,19 +104,19 @@ pub struct Test {
 }
 
 impl Test {
-    pub fn new(tl: u64, ml: u32, input_txt: &str, output_txt: &str, fs: Vec<File>) -> Test {
+    pub fn new(tl: u64, ml: u32, input_txt: String, output_txt: String, fs: Vec<File>) -> Test {
         Test {
-            tl: tl,
-            ml: ml,
-            input_txt: input_txt.to_string(),
-            output_txt: output_txt.to_string(),
-            fs: fs,
+            tl,
+            ml,
+            input_txt,
+            output_txt,
+            fs,
             outcome_addr: 0
         }
     }
     fn _dump(&mut self, dumper: &mut BundleBuilder, tgt_l: u32) {
-        dumper.write(&u64_to_bytes(self.tl).to_vec());
-        dumper.write(&u32_to_bytes(self.ml).to_vec());
+        dumper.write(&(self.tl.to_ne_bytes()));
+        dumper.write(&(self.ml.to_ne_bytes()));
         let l = dumper.set_label_string(&self.input_txt[..]);
         dumper.write_label(l);
         let l = dumper.set_label_string(&self.output_txt[..]);
@@ -177,16 +157,16 @@ impl File {
     fn _dump(&mut self, dumper: &mut BundleBuilder, tgt_l: Option<u32>) {
         let l = dumper.set_label_string(&self.name[..]);
         dumper.write_label(l);
-        dumper.write(&u32_to_bytes(match &self.access {
-            FileType::ReadOnly => 0,
-            FileType::ReadWrite => 1
-        }).to_vec());
+        dumper.write(&(match &self.access {
+            FileType::ReadOnly => 0u32,
+            FileType::ReadWrite => 1u32
+        }).to_ne_bytes());
         self.data_addr = dumper.set_label_bytes(self.data.to_vec(), 4);
         dumper.write_label(self.data_addr);
         self.sz_addr = dumper.get_label();
         dumper.set_label(self.sz_addr);
-        dumper.write(&u32_to_bytes(self.sz).to_vec());
-        dumper.write(&u32_to_bytes(self.data.len() as u32).to_vec()); 
+        dumper.write(&self.sz.to_ne_bytes());
+        dumper.write(&(self.data.len() as u32).to_ne_bytes()); 
         dumper.maybe_write_label(tgt_l);
     }
 }
@@ -206,7 +186,7 @@ impl Bundle {
         }
     }
     fn _dump(&mut self, dumper: &mut BundleBuilder) {
-        dumper.write(&u32_to_bytes(self.tests.len() as u32).to_vec());
+        dumper.write(&(self.tests.len() as u32).to_ne_bytes());
         let rootfs_l = dumper.get_label();
         dumper.write_label(rootfs_l);
         let l = dumper.set_label_string(&self.exe[..]);
@@ -289,7 +269,7 @@ impl Bundle {
         let mut dumper = BundleBuilder::new();
         self._dump(&mut dumper);
         let mut ans = Vec::<u8>::new();
-        ans.extend(&u32_to_bytes(dumper.out.len() as u32));
+        ans.extend(&(dumper.out.len() as u32).to_ne_bytes());
         ans.extend(&dumper.out);
         return ans;
     }
