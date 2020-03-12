@@ -1,5 +1,5 @@
 [package]
-name = "jjs-kvm"
+name = "jjs_kvm"
 version = "0.1.0"
 authors = ["Sergey Lisov <sleirsgoevy@gmail.com>"]
 edition = "2018"
