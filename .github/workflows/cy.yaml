@@ -1,4 +1,4 @@
-name: "Publish docker image"
+name: "test"
 
 on: push
 
@@ -7,7 +7,7 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - run: sudo apt-get update
-      - run: sudo apt-get install python3 build-essential make yasm gcc-multilib
+      - run: sudo apt-get install qemu-system python3 build-essential make yasm gcc-multilib
       - uses: actions/checkout@v1
       - run: make dist
       - run: python3 dist/launch.py python/test-pack
