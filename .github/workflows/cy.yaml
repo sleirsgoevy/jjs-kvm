@@ -1,0 +1,13 @@
+name: "Publish docker image"
+
+on: push
+
+jobs:
+  pkg-upload:
+    runs-on: "ubuntu-latest"
+    steps:
+      - run: sudo apt-get update
+      - run: sudo apt-get install python3 build-essential make yasm gcc-multilib
+      - uses: actions/checkout@v1
+      - run: make dist
+      - run: python3 dist/launch.py python/test-pack
