@@ -10,4 +10,5 @@ jobs:
       - run: sudo apt-get install qemu-system python3 build-essential make yasm gcc-multilib
       - uses: actions/checkout@v1
       - run: make dist
+      - run: sed -i 's/"enable-kvm", //g' dist/launch.py
       - run: python3 dist/launch.py python/test-pack
