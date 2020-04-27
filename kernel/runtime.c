@@ -13,6 +13,29 @@
 #include <errno.h>
 #include <sys/syscall.h>
 
+static unsigned long long tl;
+static unsigned long long tl_orig;
+static unsigned long long tl_bak;
+static unsigned long long tl_orig_bak;
+
+void save_runtime()
+{
+    save_userspace();
+    save_sys_fs();
+    save_thread_area();
+    tl_bak = tl;
+    tl_orig_bak = tl_orig;
+}
+
+void restore_runtime()
+{
+    tl = tl_bak;
+    tl_orig = tl_orig_bak;
+    restore_thread_area();
+    restore_sys_fs();
+    restore_userspace();
+}
+
 void reset_runtime()
 {
     reset_sys_fs();
@@ -37,11 +60,14 @@ static syscall_t* syscalls[] = {
     [__NR__llseek] = sys_llseek
 };
 
-enum{BAILOUT = 0x80000000, ML = 0x80000001, TL = 0x80000002};
-
-int main_loop(unsigned long long tl)
+int main_loop(unsigned long long tl_arg)
 {
-    tl *= tsc_per_us;
+    tl_arg *= tsc_per_us;
+    if(tl_orig - tl > tl_arg)
+        tl = 0;
+    else
+        tl += tl_arg - tl_orig;
+    tl_orig = tl_arg;
     while(1)
     {
         jump_userspace();
@@ -110,6 +136,8 @@ int main_loop(unsigned long long tl)
                 return ML;
             if(ans == -ENOSYS)
                 return BAILOUT;
+            if(ans == -ERESTART)
+                return RESTART;
             userspace.gp_regs[GP_REG_EAX] = ans;
             continue;
         }

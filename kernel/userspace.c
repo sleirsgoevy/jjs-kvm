@@ -14,7 +14,7 @@ static struct
 
 static unsigned int tss[26];
 
-asm("int_entry:\npusha\nrdtsc\nadd %eax, userspace\nadc %edx, userspace+4\npush %gs\npush %ds\ncall usreturn\nint_ret:\npop %ds\nmov %ds, %ax\nmov %ax, %es\npop %gs\nmov %gs, %ax\nmov %ax, %fs\nrdtsc\nneg %eax\nmov %eax, userspace\nnot %edx\nmov %edx, userspace+4\npopa\nlea 8(%esp), %esp\niret");
+asm("int_entry:\npusha\npush %gs\npush %ds\nmov %ss, %ax\nmov %ax, %ds\nmov %ax, %es\nrdtsc\nadd %eax, userspace\nadc %edx, userspace+4\ncall usreturn\nint_ret:\npop %ds\nmov %ds, %ax\nmov %ax, %es\npop %gs\nmov %gs, %ax\nmov %ax, %fs\nmovl $0, userspace\nmovl $0, userspace+4\nrdtsc\nsub %eax, userspace\nsbb %edx, userspace+4\npopa\nlea 8(%esp), %esp\niret");
 void int_ret();
 
 asm(".global int80\nint80:\npushl $0\npushl $0x80\njmp int_entry");
@@ -45,6 +45,22 @@ void reset_userspace()
     userspace.eflags = 514; //IF
     userspace.esp = 0;
     userspace.ss = SEL_DATA3;
+}
+
+static struct userspace userspace_bak;
+static char xmm_bak[512];
+
+void save_userspace()
+{
+    asm volatile("fxsave %0"::"m"(xmm_bak));
+    userspace_bak = userspace;
+    userspace_bak.eip -= 2; // restart the interrupted syscall
+}
+
+void restore_userspace()
+{
+    asm volatile("fxrstor %0"::"m"(xmm_bak));
+    userspace = userspace_bak;
 }
 
 unsigned long long tss_segment()

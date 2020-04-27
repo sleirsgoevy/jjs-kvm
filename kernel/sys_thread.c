@@ -5,6 +5,18 @@
 #include <asm/ldt.h>
 #include <errno.h>
 
+static unsigned long long tls_bak;
+
+void save_thread_area()
+{
+    tls_bak = the_gdt[SEL_TLS / 8];
+}
+
+void restore_thread_area()
+{
+    the_gdt[SEL_TLS / 8] = tls_bak;
+}
+
 unsigned int sys_set_thread_area(unsigned int udesc, unsigned int _1, unsigned int _2, unsigned int _3, unsigned int _4)
 {
     if(check_writable((void*)udesc, sizeof(struct user_desc)) < 0)

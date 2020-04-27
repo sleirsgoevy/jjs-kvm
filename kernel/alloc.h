@@ -6,6 +6,7 @@ extern unsigned int alloc_addr_high;
 extern unsigned int ll_low;
 extern unsigned int ll_high;
 extern unsigned int ml;
+extern unsigned int ml_orig;
 #define ML_FULL 0xfffffffeu
 #define ML_EXCEEDED 0xffffffffu
 

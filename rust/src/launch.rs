@@ -170,7 +170,9 @@ pub fn run(b: &mut bundle::Bundle) -> Result<(String, Vec<(u32, Vec<Vec<u8>>)>),
     let data0 = b.dump();
     let (status0, data) = do_run(data0.clone()).unwrap();
     let mut ans = Vec::<(u32, Vec<Vec<u8>>)>::new();
-    for i in &b.tests {
+    let it = &mut b.tests.iter();
+    it.next();
+    for i in it {
         let mut status = 0 as u32;
         for j in 0..4 {
             status = (status << 8) | (data[(i.outcome_addr + 3 - j) as usize] as u32);
@@ -183,7 +185,7 @@ pub fn run(b: &mut bundle::Bundle) -> Result<(String, Vec<(u32, Vec<Vec<u8>>)>),
                     for k in 0..4 {
                         sz = (sz << 8) | (data[(j.sz_addr + 3 - k) as usize] as u32);
                     }
-                    let content = &data[j.data_addr as usize..(j.data_addr + sz) as usize];
+                    let content = &data[j.data_addr.unwrap() as usize..(j.data_addr.unwrap() + sz) as usize];
                     let content = content.to_vec();
                     outputs.push(content);
                 }

@@ -79,11 +79,14 @@ class File:
     def _dump(self, dumper, tgt_l):
         dumper.write_label(dumper.set_label_string(self.name))
         dumper.write(self.access.to_bytes(4, 'little'))
-        self.data_addr = dumper.set_label_bytes(dumper.get_label(), self.data, 4)
-        dumper.write_label(self.data_addr)
+        if self.data != None:
+            self.data_addr = dumper.set_label_bytes(dumper.get_label(), self.data, 4)
+            dumper.write_label(self.data_addr)
+        else:
+            dumper.write(bytes(4))
         self.sz_addr = dumper.set_label()
         dumper.write(self.sz.to_bytes(4, 'little'))
-        dumper.write(len(self.data).to_bytes(4, 'little'))
+        dumper.write((0 if self.data == None else len(self.data)).to_bytes(4, 'little'))
         dumper.write_label(tgt_l)
 
 class Bundle:
@@ -92,7 +95,7 @@ class Bundle:
         self.exe = exe
         self.tests = tests
     def _dump(self, dumper):
-        dumper.write(len(self.tests).to_bytes(4, 'little'))
+        dumper.write((len(self.tests)-1).to_bytes(4, 'little'))
         rootfs_l = dumper.get_label() if self.files else None
         dumper.write_label(rootfs_l)
         dumper.write_label(dumper.set_label_string(self.exe))
@@ -125,7 +128,8 @@ class Bundle:
         dumper.resolve()
         for i in all_files:
             i.sz_addr = dumper.labels[i.sz_addr] - 0xc1000000
-            i.data_addr = dumper.labels[i.data_addr] - 0xc1000000
+            if i.data_addr != None:
+                i.data_addr = dumper.labels[i.data_addr] - 0xc1000000
         for i in self.tests:
             i.outcome_addr = dumper.labels[i.outcome_addr] - 0xc1000000
     def dump(self):
