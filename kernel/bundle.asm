@@ -10,6 +10,14 @@ dd 2 ;ntests
 dd exec_file
 dd exec_fn
 
+; test #0 (trap)
+dq 1000000 ;tl
+dd 65536 ;ml (=256M)
+dd input_txt
+dd output_txt
+dd test0_input_txt
+dd 0 ;outcome
+
 ; test #1
 dq 1000000 ;tl
 dd 65536 ;ml (=256M)
@@ -25,6 +33,22 @@ dd input_txt
 dd output_txt
 dd test2_input_txt ;fs
 dd 0 ;outcome
+
+test0_input_txt:
+dd input_txt
+dd 0 ;FILE_READONLY
+dd 0 ;data
+dd 0 ;sz
+dd 0 ;capacity
+dd test0_output_txt ;next
+
+test0_output_txt:
+dd output_txt
+dd 1 ;FILE_READWRITE
+dd 0 ;data
+dd 0 ;sz
+dd 0 ;capacity
+dd exec_file ;next
 
 test1_input_txt:
 dd input_txt ;filename

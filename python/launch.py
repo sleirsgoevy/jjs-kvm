@@ -48,7 +48,7 @@ def do_run(bundle):
 def run(b):
     status0, data = do_run(b.dump())
     ans = []
-    for i in b.tests:
+    for i in b.tests[1:]:
         status = int.from_bytes(data[i.outcome_addr:i.outcome_addr+4], 'little')
         outputs = []
         for j in i.files:

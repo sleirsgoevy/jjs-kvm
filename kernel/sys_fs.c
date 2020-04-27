@@ -10,7 +10,20 @@
 #undef brk
 
 struct fd fds[1024];
+static struct fd fds_bak[1024];
 struct file* the_fs;
+
+void save_sys_fs()
+{
+    for(int i = 0; i < 1024; i++)
+        fds_bak[i] = fds[i];
+}
+
+void restore_sys_fs()
+{
+    for(int i = 0; i < 1024; i++)
+        fds[i] = fds_bak[i];
+}
 
 void reset_sys_fs()
 {
@@ -25,6 +38,8 @@ unsigned int sys_read(unsigned int fd, unsigned int buf, unsigned int count, uns
     do_cow((void*)buf, count);
     if(fd < 0 || fd >= 1024 || !fds[fd].file)
         return -EBADF;
+    if(!fds[fd].file->data)
+        return -ERESTART;
     return fs_read(fds + fd, (void*)buf, count);
 }
 
@@ -34,6 +49,8 @@ unsigned int sys_write(unsigned int fd, unsigned int buf, unsigned int count, un
         return -EFAULT;
     if(fd < 0 || fd >= 1024 || !fds[fd].file)
         return -EBADF;
+    if(!fds[fd].file->data)
+        return -ERESTART;
     unsigned int ans = fs_write(fds + fd, (const void*)buf, count);
     if(ans != count)
         return -ENOSYS; //output buffer is full, bailing out
@@ -73,6 +90,8 @@ unsigned int sys_fstat64(unsigned int fd, unsigned int struct_p, unsigned int _1
         return -EBADF;
     do_cow((void*)struct_p, sizeof(struct stat));
     struct stat* ans = (struct stat*)struct_p;
+    if(!fds[fd].file->data)
+        return -ERESTART;
     *ans = (struct stat){
         .st_mode = 0100444 | (fds[fd].file->access == FILE_READWRITE?0222:0),
         .st_ino = 179,
@@ -106,6 +125,8 @@ unsigned int sys_llseek(unsigned int fd, unsigned int off_high, unsigned int off
         offset += fds[fd].offset;
         break;
     case 2:
+        if(!fds[fd].file->data)
+            return -ERESTART;
         offset += fds[fd].file->sz;
         break;
     }

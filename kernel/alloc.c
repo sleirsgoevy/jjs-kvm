@@ -5,7 +5,8 @@ unsigned int alloc_addr_low = 0x100000;
 unsigned int alloc_addr_high = 0x100000 + (LOW_MEM_SZ);
 unsigned int ll_low = 0;
 unsigned int ll_high = 0;
-unsigned int ml = 0xfffffffeu;
+unsigned int ml = ML_FULL;
+unsigned int ml_orig = ML_FULL;
 
 unsigned int pop_page_low()
 {
@@ -73,8 +74,9 @@ void highmem_free(void* virt, unsigned int phys)
 
 void set_ml(unsigned int new_ml)
 {
-    if(ml < new_ml)
+    if(ml_orig - ml > new_ml)
         ml = ML_EXCEEDED;
     else
-        ml += new_ml - (unsigned int)ML_FULL;
+        ml += new_ml - ml_orig;
+    ml_orig = new_ml;
 }

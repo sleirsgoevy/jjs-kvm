@@ -61,7 +61,7 @@ void cow_prepare()
         }
 }
 
-static unsigned int bak1, bak2, bak3, bak4, bak5;
+static unsigned int bak1, bak2, bak3, bak4, bak5, bak6;
 
 static void alloc_mark()
 {
@@ -70,6 +70,7 @@ static void alloc_mark()
     bak3 = ll_low;
     bak4 = ll_high;
     bak5 = ml;
+    bak6 = ml_orig;
     ll_low = ll_high = 0; //prevent free of currently allocated pages
 }
 
@@ -80,6 +81,7 @@ static void alloc_reset()
     ll_low = bak3;
     ll_high = bak4;
     ml = bak5;
+    ml_orig = bak6;
 }
 
 void clone_paging()

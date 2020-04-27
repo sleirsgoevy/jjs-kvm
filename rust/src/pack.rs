@@ -6,7 +6,7 @@ use std::result::Result;
 use crate::error::JjsKvmError;
 use crate::bundle;
 
-fn pack_fs(d: &String, p: &String, fszlim: u32, out: &mut Vec<bundle::File>) -> Result<(), Box<dyn std::error::Error> > {
+fn pack_fs(d: &String, p: &String, fszlim: u32, out: &mut Vec<bundle::File>, allnones: bool) -> Result<(), Box<dyn std::error::Error> > {
     match fs::read_link(&d) {
         Ok(pp) => {
             if pp.to_str().unwrap_or("") != "/dev/stdout" {
@@ -14,7 +14,7 @@ fn pack_fs(d: &String, p: &String, fszlim: u32, out: &mut Vec<bundle::File>) -> 
             }
             let mut p = p.clone();
             p.pop();
-            out.push(bundle::File::new(&p, bundle::FileType::ReadWrite, &vec![0 as u8; fszlim as usize], 0));
+            out.push(bundle::File::new(&p, bundle::FileType::ReadWrite, &if allnones { None } else { Some(vec![0 as u8; fszlim as usize]) }, 0));
             return Ok(());
         },
         Err(_) => {}
@@ -37,27 +37,33 @@ fn pack_fs(d: &String, p: &String, fszlim: u32, out: &mut Vec<bundle::File>) -> 
                 }
                 let i = i.unwrap();
                 if i.chars().next() != Some('.') {
-                    pack_fs(&(d.to_owned()+"/"+i), &(p.to_owned()+i+"/"), fszlim, out)?;
+                    pack_fs(&(d.to_owned()+"/"+i), &(p.to_owned()+i+"/"), fszlim, out, allnones)?;
                 }
             }
             return Ok(());
         },
         Err(_) => {}
     };
-    let mut file = fs::File::open(d)?;
-    let mut file_data = Vec::<u8>::new();
-    let l = file.read_to_end(&mut file_data).unwrap();
-    let mut p = p.clone();
-    p.pop();
-    out.push(bundle::File::new(&p, bundle::FileType::ReadOnly, &file_data, l as u32));
+    if allnones {
+        let mut p = p.clone();
+        p.pop();
+        out.push(bundle::File::new(&p, bundle::FileType::ReadOnly, &None, 0u32));
+    } else {
+        let mut file = fs::File::open(d)?;
+        let mut file_data = Vec::<u8>::new();
+        let l = file.read_to_end(&mut file_data).unwrap();
+        let mut p = p.clone();
+        p.pop();
+        out.push(bundle::File::new(&p, bundle::FileType::ReadOnly, &Some(file_data), l as u32));
+    }
     Ok(())
 }
 
 pub fn pack_dir(base_dir: &String) -> Result<bundle::Bundle, Box<dyn std::error::Error> > {
     let base_dir : String = base_dir.to_string();
     let mut rootfs = Vec::<bundle::File>::new();
-    pack_fs(&(base_dir.clone()+"/root"), &"/".to_string(), 0, &mut rootfs)?;
-    pack_fs(&(base_dir.clone()+"/cwd"), &"".to_string(), 0, &mut rootfs)?;
+    pack_fs(&(base_dir.clone()+"/root"), &"/".to_string(), 0, &mut rootfs, false)?;
+    pack_fs(&(base_dir.clone()+"/cwd"), &"".to_string(), 0, &mut rootfs, false)?;
     let exe = std::fs::read_link(&(base_dir.clone()+"/exe"))?;
     let exe = match exe.to_str() {
         Some(x) => x,
@@ -91,10 +97,10 @@ pub fn pack_dir(base_dir: &String) -> Result<bundle::Bundle, Box<dyn std::error:
     }
     data.sort_unstable();
     let mut tests = Vec::<bundle::Test>::new();
-    for (_, tl, ml, fszlim, dir) in data {
+    for (idx, (_, tl, ml, fszlim, dir)) in data.iter().enumerate() {
         let mut testfs = Vec::<bundle::File>::new();
-        pack_fs(&(base_dir.clone()+"/"+&dir+"/root"), &"/".to_string(), fszlim, &mut testfs)?;
-        pack_fs(&(base_dir.clone()+"/"+&dir+"/cwd"), &"".to_string(), fszlim, &mut testfs)?;
+        pack_fs(&(base_dir.clone()+"/"+&dir+"/root"), &"/".to_string(), *fszlim, &mut testfs, idx == 0)?;
+        pack_fs(&(base_dir.clone()+"/"+&dir+"/cwd"), &"".to_string(), *fszlim, &mut testfs, idx == 0)?;
         let input_txt = std::fs::read_link(&(base_dir.clone()+"/"+&dir+"/input"))?;
         let input_txt = match input_txt.to_str() {
             Some(x) => x,
@@ -105,7 +111,7 @@ pub fn pack_dir(base_dir: &String) -> Result<bundle::Bundle, Box<dyn std::error:
             Some(x) => x,
             None => return Err(Box::new(JjsKvmError::new(format!("{} points to non-string", base_dir.clone()+"/"+&dir+"/output").as_str())))
         };
-        tests.push(bundle::Test::new(tl, ml, input_txt.to_string(), output_txt.to_string(), testfs));
+        tests.push(bundle::Test::new(*tl, *ml, input_txt.to_string(), output_txt.to_string(), testfs));
     }
     Ok(bundle::Bundle::new(rootfs, exe, tests))
 }

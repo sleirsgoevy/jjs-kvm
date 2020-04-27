@@ -137,21 +137,24 @@ pub enum FileType {
 pub struct File {
     name: String,
     pub access: FileType,
-    data: Vec<u8>,
+    data: Option<Vec<u8>>,
     sz: u32,
     pub sz_addr: u32,
-    pub data_addr: u32
+    pub data_addr: Option<u32>
 }
 
 impl File {
-    pub fn new(name: &str, access: FileType, data: &Vec<u8>, sz: u32) -> File {
+    pub fn new(name: &str, access: FileType, data: &Option<Vec<u8>>, sz: u32) -> File {
         File {
             name: name.to_string(),
             access: access,
-            data: data.to_vec(),
+            data: match data {
+                Some(x) => Some(x.to_vec()),
+                None => None
+            },
             sz: sz,
             sz_addr: 0,
-            data_addr: 0
+            data_addr: None
         }
     }
     fn _dump(&mut self, dumper: &mut BundleBuilder, tgt_l: Option<u32>) {
@@ -161,12 +164,21 @@ impl File {
             FileType::ReadOnly => 0u32,
             FileType::ReadWrite => 1u32
         }).to_ne_bytes());
-        self.data_addr = dumper.set_label_bytes(self.data.to_vec(), 4);
-        dumper.write_label(self.data_addr);
+        if let Some(x) = &self.data {
+            self.data_addr = Some(dumper.set_label_bytes(x.to_vec(), 4));
+            dumper.write_label(self.data_addr.unwrap());
+        } else {
+            self.data_addr = None;
+            dumper.write(&[0 as u8; 4]);
+        }
         self.sz_addr = dumper.get_label();
         dumper.set_label(self.sz_addr);
         dumper.write(&self.sz.to_ne_bytes());
-        dumper.write(&(self.data.len() as u32).to_ne_bytes()); 
+        if let Some(x) = &self.data {
+            dumper.write(&(x.len() as u32).to_ne_bytes());
+        } else {
+            dumper.write(&[0 as u8; 4]);
+        }
         dumper.maybe_write_label(tgt_l);
     }
 }
@@ -186,7 +198,7 @@ impl Bundle {
         }
     }
     fn _dump(&mut self, dumper: &mut BundleBuilder) {
-        dumper.write(&(self.tests.len() as u32).to_ne_bytes());
+        dumper.write(&((self.tests.len()-1) as u32).to_ne_bytes());
         let rootfs_l = dumper.get_label();
         dumper.write_label(rootfs_l);
         let l = dumper.set_label_string(&self.exe[..]);
@@ -242,10 +254,12 @@ impl Bundle {
                     Label::Addr(x) => x,
                     Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
                 } - 0xc1000000;
-                i.data_addr = match dumper.labels.get(&i.data_addr).unwrap() {
-                    Label::Addr(x) => x,
-                    Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
-                } - 0xc1000000;
+                if let Some(da) = i.data_addr {
+                    i.data_addr = Some(match dumper.labels.get(&da).unwrap() {
+                        Label::Addr(x) => x,
+                        Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
+                    } - 0xc1000000);
+                }
             }
         }
         for i in &mut self.files {
@@ -253,10 +267,12 @@ impl Bundle {
                 Label::Addr(x) => x,
                 Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
             } - 0xc1000000;
-            i.data_addr = match dumper.labels.get(&i.data_addr).unwrap() {
-                Label::Addr(x) => x,
-                Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
-            } - 0xc1000000;
+            if let Some(da) = i.data_addr {
+                i.data_addr = Some(match dumper.labels.get(&da).unwrap() {
+                    Label::Addr(x) => x,
+                    Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
+                } - 0xc1000000);
+            }
         }
         for i in &mut self.tests {
             i.outcome_addr = match dumper.labels.get(&i.outcome_addr).unwrap() {

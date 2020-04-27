@@ -40,6 +40,12 @@ void reset_userspace();
 //actually transfer control to userspace
 void jump_userspace();
 
+//back up the registers
+void save_userspace();
+
+//restore the registers
+void restore_userspace();
+
 //for GDT setup code
 unsigned long long tss_segment();
 

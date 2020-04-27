@@ -12,4 +12,6 @@ syscall_t sys_access;
 syscall_t sys_fstat64;
 syscall_t sys_llseek;
 
+void save_sys_fs();
+void restore_sys_fs();
 void reset_sys_fs();

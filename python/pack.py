@@ -20,18 +20,23 @@
 
 import bundle, os, sys
 
-def pack_fs(d, p, fszlim):
+def pack_fs(d, p, fszlim, all_nones):
     if os.path.islink(d):
         assert os.readlink(d) == '/dev/stdout'
-        return [bundle.File(p[:-1], bundle.File.READWRITE, bytes(fszlim), 0)]
+        return [bundle.File(p[:-1], bundle.File.READWRITE, None if all_nones else bytes(fszlim), 0)]
     elif os.path.isdir(d):
-        return sum((pack_fs(d+'/'+i, p+i+'/', fszlim) for i in os.listdir(d) if not i.startswith('.')), [])
+        return sum((pack_fs(d+'/'+i, p+i+'/', fszlim, all_nones) for i in os.listdir(d) if not i.startswith('.')), [])
     else:
-        data = open(d, 'rb').read()
-        return [bundle.File(p[:-1], bundle.File.READONLY, data, len(data))]
+        if all_nones:
+            data = None
+            ll = 0
+        else:
+            data = open(d, 'rb').read()
+            ll = len(data)
+        return [bundle.File(p[:-1], bundle.File.READONLY, data, ll)]
 
 def pack_dir(base_dir):
-    rootfs = pack_fs(base_dir+'/root', '/', -1)+pack_fs(base_dir+'/cwd', '', -1)
+    rootfs = pack_fs(base_dir+'/root', '/', -1, False)+pack_fs(base_dir+'/cwd', '', -1, False)
     exe = os.readlink(base_dir+'/exe')
     data = []
     for i in os.listdir(base_dir):
@@ -41,7 +46,7 @@ def pack_dir(base_dir):
     data.sort()
     tests = []
     for _, tl, ml, fszlim, dir in data:
-        fs = pack_fs(base_dir+'/'+dir+'/root', '/', fszlim)+pack_fs(base_dir+'/'+dir+'/cwd', '', fszlim)
+        fs = pack_fs(base_dir+'/'+dir+'/root', '/', fszlim, not tests)+pack_fs(base_dir+'/'+dir+'/cwd', '', fszlim, not tests)
         input_txt = os.readlink(base_dir+'/'+dir+'/input')
         output_txt = os.readlink(base_dir+'/'+dir+'/output')
         tests.append(bundle.Test(tl, ml, input_txt, output_txt, fs))
