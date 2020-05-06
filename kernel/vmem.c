@@ -77,7 +77,6 @@ int load_executable(struct fd* f, struct entry* ans, const char* exe, const char
     }
     *esp_out++ = 0;
     //auxv
-    
     *esp_out++ = AT_HWCAP;
     *esp_out++ = 0xbfebfbff; // wtf is this? cpuid??
     *esp_out++ = AT_PAGESZ;

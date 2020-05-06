@@ -200,7 +200,7 @@ impl Bundle {
     fn _dump(&mut self, dumper: &mut BundleBuilder) {
         dumper.write(&((self.tests.len()-1) as u32).to_ne_bytes());
         let rootfs_l = dumper.get_label();
-        dumper.write_label(rootfs_l);
+        //dumper.write_label(rootfs_l);
         let l = dumper.set_label_string(&self.exe[..]);
         dumper.write_label(l);
         let mut fs_ls = Vec::new();
