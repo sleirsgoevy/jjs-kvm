@@ -15,7 +15,6 @@ struct bundle
 {
     unsigned int size;
     unsigned int ntests;
-    struct file* rootfs;
     const char* executable;
     struct test tests[];
 };

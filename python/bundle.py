@@ -97,7 +97,7 @@ class Bundle:
     def _dump(self, dumper):
         dumper.write((len(self.tests)-1).to_bytes(4, 'little'))
         rootfs_l = dumper.get_label() if self.files else None
-        dumper.write_label(rootfs_l)
+        #dumper.write_label(rootfs_l)
         dumper.write_label(dumper.set_label_string(self.exe))
         all_files = sum((i.files for i in self.tests), self.files)
         fs_ls = []

@@ -15,9 +15,9 @@ extern unsigned int userspace_test_len;
 
 int main()
 {
-    struct file* executable = bundle->rootfs;
+    struct file* executable = bundle->tests[0].fs;
     struct fd f;
-    if(fs_open(&f, executable, "test", 0) < 0)
+    if(fs_open(&f, executable, bundle->executable, 0) < 0)
     {
         debug_puts("main: fs_open(\"test\") failed\n");
         return 1;
