@@ -20,7 +20,7 @@ setup.bin: setup.asm
 	python3 build_bin.py
 
 ../bundle.bin: bundle.asm
-	cd userspace; make test-cpp
+	cd userspace; make test-dyn
 	yasm bundle.asm -o ../bundle.bin
 
 qemu: all
@@ -31,6 +31,9 @@ qemu-debug: all
 
 qemu-kvm: all
 	cd ../qemu; make kvm
+
+qemu-kvm-debug: all
+	cd ../qemu; make kvm-debug
 
 bochs: all
 	cd ../bochs; make run

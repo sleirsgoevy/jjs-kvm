@@ -3,6 +3,7 @@
 struct file
 {
     const char* name;
+    unsigned int inode;
     enum
     {
         FILE_READONLY,

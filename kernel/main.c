@@ -25,7 +25,7 @@ int main()
     struct entry entry;
     const char* argv[] = {"./test", 0};
     const char* envp[] = {0};
-    if(load_executable(&f, &entry, argv[0], argv, envp) < 0)
+    if(load_executable(executable, &f, &entry, argv[0], argv, envp) < 0)
     {
         debug_puts("load_executable(): failed to load ELF\n");
         return 1;

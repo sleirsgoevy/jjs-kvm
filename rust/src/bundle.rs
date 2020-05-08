@@ -6,13 +6,15 @@ use std::collections::HashMap;
 enum Label {
     Addr(u32),
     Bytes(Vec<u8>, u32),
+    Inode(),
 }
 
 struct BundleBuilder {
     labels: HashMap<u32, Label>,
     labelrefs: HashMap<u32, u32>,
     out: Vec<u8>,
-    counter: u32
+    counter: u32,
+    inode: u32
 }
 
 impl BundleBuilder {
@@ -21,7 +23,8 @@ impl BundleBuilder {
             labels: HashMap::new(),
             labelrefs: HashMap::new(),
             out: Vec::new(),
-            counter: 0
+            counter: 0,
+            inode: 179
         }
     }
     fn pc(&self) -> u32{
@@ -37,7 +40,12 @@ impl BundleBuilder {
                     self.labels.insert(*v, Label::Addr(cur));
                     cur
                 },
-                Label::Addr(x) => *x
+                Label::Addr(x) => *x,
+                Label::Inode() => {
+                    let ans = self.inode;
+                    self.inode += 1;
+                    ans
+                },
             };
             for i in k-0xc1000004..k-0xc1000000 {
                 self.out[i as usize] = (addr & 0xff) as u8;
@@ -90,6 +98,11 @@ impl BundleBuilder {
     pub fn set_label_bytes(&mut self, data: Vec<u8>, q: u32) -> u32 {
         let lbl = self.get_label();
         self.labels.insert(lbl, Label::Bytes(data, q));
+        lbl
+    }
+    pub fn set_label_inode(&mut self) -> u32 {
+        let lbl = self.get_label();
+        self.labels.insert(lbl, Label::Inode());
         lbl
     }
 }
@@ -159,6 +172,8 @@ impl File {
     }
     fn _dump(&mut self, dumper: &mut BundleBuilder, tgt_l: Option<u32>) {
         let l = dumper.set_label_string(&self.name[..]);
+        dumper.write_label(l);
+        let l = dumper.set_label_inode();
         dumper.write_label(l);
         dumper.write(&(match &self.access {
             FileType::ReadOnly => 0u32,
@@ -252,12 +267,12 @@ impl Bundle {
             for i in &mut ii.fs {
                 i.sz_addr = match dumper.labels.get(&i.sz_addr).unwrap() {
                     Label::Addr(x) => x,
-                    Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
+                    _ => panic!("tried to get addr of non-addr label!"),
                 } - 0xc1000000;
                 if let Some(da) = i.data_addr {
                     i.data_addr = Some(match dumper.labels.get(&da).unwrap() {
                         Label::Addr(x) => x,
-                        Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
+                        _ => panic!("tried to get addr of non-addr label!")
                     } - 0xc1000000);
                 }
             }
@@ -265,19 +280,19 @@ impl Bundle {
         for i in &mut self.files {
             i.sz_addr = match dumper.labels.get(&i.sz_addr).unwrap() {
                 Label::Addr(x) => x,
-                Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
+                _ => panic!("tried to get addr of non-addr label!")
             } - 0xc1000000;
             if let Some(da) = i.data_addr {
                 i.data_addr = Some(match dumper.labels.get(&da).unwrap() {
                     Label::Addr(x) => x,
-                    Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
+                    _ => panic!("tried to get addr of non-addr label!")
                 } - 0xc1000000);
             }
         }
         for i in &mut self.tests {
             i.outcome_addr = match dumper.labels.get(&i.outcome_addr).unwrap() {
                 Label::Addr(x) => x,
-                Label::Bytes(_, _) => panic!("tried to get addr of bytes label!")
+                _ => panic!("tried to get addr of non-addr label!")
             } - 0xc1000000;
         }
     }

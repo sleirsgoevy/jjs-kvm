@@ -7,6 +7,7 @@ class _BundleBuilder:
         self.out = io.BytesIO()
         self.pc = 0xc1000004
         self.counter = 0
+        self.inode = 179
     def resolve(self):
         for k, v in self.labelrefs.items():
             p = self.labels[v]
@@ -21,6 +22,9 @@ class _BundleBuilder:
                 self.labels[v] = self.pc
                 self.write(p[0])
                 p = self.labels[v]
+            if p is ...:
+                p = self.labels[v] = self.inode
+                self.inode += 1
             self.out.seek(k-0xc1000004)
             self.out.write(p.to_bytes(4, 'little'))
     def write_label(self, l):
@@ -41,6 +45,9 @@ class _BundleBuilder:
         return s
     def set_label_bytes(self, l, bundle, align):
         self.labels[l] = (bundle, align)
+        return l
+    def set_label_inode(self, l):
+        self.labels[l] = ...
         return l
     def write(self, data):
         self.out.write(data)
@@ -78,6 +85,7 @@ class File:
         self.data_addr = None
     def _dump(self, dumper, tgt_l):
         dumper.write_label(dumper.set_label_string(self.name))
+        dumper.write_label(dumper.set_label_inode(dumper.get_label()))
         dumper.write(self.access.to_bytes(4, 'little'))
         if self.data != None:
             self.data_addr = dumper.set_label_bytes(dumper.get_label(), self.data, 4)

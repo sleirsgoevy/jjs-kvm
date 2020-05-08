@@ -11,9 +11,9 @@ static int strcmp(const char* a, const char* b)
 
 int fs_open(struct fd* tgt, struct file* fs, const char* name, int flags)
 {
-    if(flags != (flags & (O_RDONLY|O_WRONLY|O_RDWR|O_CREAT|O_CLOEXEC|O_TRUNC)))
+    if(flags != (flags & (O_RDONLY|O_WRONLY|O_RDWR|O_CREAT|O_CLOEXEC|O_TRUNC|__O_LARGEFILE)))
         return -ENOSYS;
-    int is_write = (flags & O_RDWR || flags & O_RDONLY);
+    int is_write = (flags & O_RDWR || flags & O_WRONLY);
     if(!is_write && flags & (O_CREAT|O_TRUNC))
         return -EINVAL;
     while(name[0] == '.' && name[1] == '/')

@@ -8,7 +8,8 @@ clean_dist:
 	rm -rf dist
 
 clean: clean_dist
-	rm kernel.bin
+	rm -f kernel.bin
 	cd kernel; make clean
 	cd qemu; make clean
+	cd bochs; make clean
 	rm -rf python/__pycache__

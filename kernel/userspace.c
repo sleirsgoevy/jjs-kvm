@@ -19,6 +19,8 @@ void int_ret();
 
 asm(".global int80\nint80:\npushl $0\npushl $0x80\njmp int_entry");
 asm(".global int0e\nint0e:\ntestl $3, 8(%esp)\nje int0e_kernel\npushl $0x0e\njmp int_entry\nint0e_kernel:\ncall kernel_page_fault\nlea 4(%esp), %esp\niret");
+asm(".global int06\nint06:\npushl $0\npushl $0x06\njmp int_entry");
+asm(".global int00\nint00:\npushl $0\npushl $0x00\njmp int_entry");
 asm(".global int_unknown\nint_unknown:\nlea 312+userspace, %esp\npushl $0x100\njmp int_entry");
 asm(".global int68\nint68:\npushl $0\npushl $0x68\njmp int_entry");
 //asm(".global int68\nint68:\nlidt int68idt\nint $0x68\nint68idt:\n.long 0,0");

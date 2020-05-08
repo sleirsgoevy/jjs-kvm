@@ -172,7 +172,7 @@ void map_range(unsigned int from, unsigned int to, int rw)
         //SUBOPTIMAL, needs rewriting. unnecessary page allocation/deallocation possible
         unsigned int old_pgdir = LINEAR(cr3)[pgdir];
         LINEAR(cr3)[pgdir] = get_cow(old_pgdir);
-        if(!map_pgdir(LINEAR(LINEAR(cr3)[pgdir] & ~4095u), pgdir << 10, from, to, rw))
+        if(!map_pgdir(LINEAR(LINEAR(cr3)[pgdir] & ~4095u), pgdir << 10, from, to, rw) && old_pgdir != LINEAR(cr3)[pgdir])
         {
             lowmem_free_page(LINEAR(cr3)[pgdir] & ~4095u);
             LINEAR(cr3)[pgdir] = old_pgdir;
@@ -233,7 +233,7 @@ static void set_rights_pgdir(unsigned int* pgdir, unsigned int base, unsigned in
             if(w)
                 pgdir[i] |= ((pgdir[i]&1024u)?512u:2u);
             else
-                pgdir[i] &= !514u;
+                pgdir[i] &= ~514u;
         }
 }
 
@@ -421,6 +421,7 @@ void move_pages(unsigned int to, unsigned int from, unsigned int sz)
     {
         pt1[i1b] = pt2[i2b];
         pt2[i2b] |= 1024u; //for unmap_range to not deallocate
+        invlpg(i1a<<22|i1b<<12);
         i1b += step;
         i2b += step;
         if(i1b == ~0u)

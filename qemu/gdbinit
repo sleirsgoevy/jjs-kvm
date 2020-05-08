@@ -1,4 +1,4 @@
 target remote 127.0.0.1:1234
-break _start
+hbreak _start
 cont
 disable 1

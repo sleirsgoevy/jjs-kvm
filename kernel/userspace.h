@@ -51,6 +51,8 @@ unsigned long long tss_segment();
 
 //for IDT setup code
 void int80(); //syscall
-void int0e(); //unknown
+void int00(); //SIGFPT
+void int06(); //SIGILL
+void int0e(); //SIGSEGV
 void int68(); //PIT
 void int_unknown();

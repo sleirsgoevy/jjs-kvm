@@ -12,5 +12,8 @@ test-c: test.c
 test-cpp: test.cpp
 	g++ $(CXXFLAGS) test.cpp -g -m32 -static -o test
 
+test-dyn: test.cpp
+	g++ $(CXXFLAGS) test.cpp -g -m32 -o test -fPIE -fPIC
+
 clean:
 	rm -f test.o test

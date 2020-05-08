@@ -2,11 +2,14 @@
 #include "sys_fs.h"
 #include "vmem.h"
 #include "paging.h"
+#include "debugout.h"
 #define brk libc_brk
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/stat.h> //hope `struct stat` is actually stat64
+#include <asm/stat.h> // struct stat64
+#define _FCNTL_H // avoid `Never use ... directly` error
+#include <bits/fcntl-linux.h> // avoid `redefinition of struct stat` error
 #undef brk
 
 struct fd fds[1024];
@@ -82,29 +85,51 @@ unsigned int sys_access(unsigned int path_p, unsigned int mode, unsigned int _1,
     return 0;
 }
 
-unsigned int sys_fstat64(unsigned int fd, unsigned int struct_p, unsigned int _1, unsigned int _2, unsigned int _3)
+static unsigned int do_fstat64(struct fd* fd, unsigned int struct_p)
 {
-    if(check_writable((void*)struct_p, sizeof(struct stat)) < 0)
-        return -EFAULT;
-    if(!fds[fd].file)
-        return -EBADF;
-    do_cow((void*)struct_p, sizeof(struct stat));
-    struct stat* ans = (struct stat*)struct_p;
-    if(!fds[fd].file->data)
+    do_cow((void*)struct_p, sizeof(struct stat64));
+    struct stat64* ans = (struct stat64*)struct_p;
+    if(!fd->file->data)
         return -ERESTART;
-    *ans = (struct stat){
-        .st_mode = 0100444 | (fds[fd].file->access == FILE_READWRITE?0222:0),
-        .st_ino = 179,
+    debug_puts("notice: do_fstat64: inode = ");
+    debug_putn(fd->file->inode, 10);
+    debug_puts("\n");
+    *ans = (struct stat64){
+        .st_mode = 0107444 | (fd->file->access == FILE_READWRITE?0222:0),
+        .st_ino = fd->file->inode,
         .st_dev = 0xfe00,
         .st_nlink = 1,
         .st_uid = 0,
         .st_gid = 0,
-        .st_size = fds[fd].file->sz,
+        .st_size = fd->file->sz,
         .st_atime = 0,
         .st_ctime = 0,
         .st_mtime = 0
     };
     return 0;
+}
+
+unsigned int sys_fstat64(unsigned int fd, unsigned int struct_p, unsigned int _1, unsigned int _2, unsigned int _3)
+{
+    if(check_writable((void*)struct_p, sizeof(struct stat64)) < 0)
+        return -EFAULT;
+    if(!fds[fd].file)
+        return -EBADF;
+    return do_fstat64(fds+fd, struct_p);
+}
+
+unsigned int sys_stat64(unsigned int path, unsigned int struct_p, unsigned int _1, unsigned int _2, unsigned int _3)
+{
+    const char* path_s = (const char*)path;
+    if(check_string(path_s, 4096))
+        return -EFAULT;
+    if(check_writable((void*)struct_p, sizeof(struct stat64)) < 0)
+        return -EFAULT;
+    struct fd tmp;
+    int status = fs_open(&tmp, the_fs, path_s, 0);
+    if(status)
+        return status;
+    return do_fstat64(&tmp, struct_p);
 }
 
 unsigned int sys_llseek(unsigned int fd, unsigned int off_high, unsigned int off_low, unsigned int ans_p, unsigned int whence)
@@ -136,4 +161,40 @@ unsigned int sys_llseek(unsigned int fd, unsigned int off_high, unsigned int off
         return -ENOSYS;
     *(unsigned long long*)ans_p = fds[fd].offset = offset;
     return 0;
+}
+
+unsigned int sys_open(unsigned int path, unsigned int flags, unsigned int mode, unsigned int _1, unsigned int _2)
+{
+    const char* path_s = (const char*)path;
+    if(check_string(path_s, 4096))
+        return -EFAULT;
+    if((flags & O_CREAT) && ((mode & 0700) != 0600))
+        return -ENOSYS; // POSIX permissions are not implemented
+    int fdnum;
+    for(fdnum = 0; fdnum < 1024 && fds[fdnum].file; fdnum++);
+    if(fdnum == 1024)
+        return -ENFILE;
+    debug_puts("... open(\"");
+    debug_puts((char*)path_s);
+    debug_puts("\", 0x");
+    debug_putn(flags, 16);
+    debug_puts(", 0");
+    debug_putn(mode, 8);
+    debug_puts(") = ");
+    int status = fs_open(fds+fdnum, the_fs, path_s, flags);
+    debug_putns(status, 10);
+    debug_puts(" ...\n");
+    if(status) // failed
+    {
+        fds[fdnum].file = 0;
+        return status;
+    }
+    return fdnum;
+}
+
+unsigned int sys_openat(unsigned int dirfd, unsigned int path, unsigned int flags, unsigned int mode, unsigned int _)
+{
+    if(dirfd != AT_FDCWD)
+        return -ENOSYS;
+    return sys_open(path, flags, mode, _, _);
 }

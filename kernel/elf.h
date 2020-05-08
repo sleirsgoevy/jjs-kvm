@@ -36,4 +36,4 @@ struct elf_pheader
 
 int map_segment(struct fd* f, struct elf_pheader* seg);
 
-unsigned int load_elf(struct fd* f, unsigned int* last_addr, unsigned int* phnum);
+unsigned int load_elf(struct fd* f, unsigned int* last_addr, unsigned int* phdr_addr, unsigned int* phnum, unsigned int* at_base, char* interp, unsigned int interp_sz);

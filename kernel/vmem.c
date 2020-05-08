@@ -3,6 +3,8 @@
 #include "userspace.h"
 #include "debugout.h"
 #include "elf.h"
+#include "memmap.h"
+#include "done.h"
 #include <errno.h>
 #include <bits/auxv.h>
 
@@ -10,19 +12,47 @@ static unsigned int cur_brk;
 static unsigned int orig_brk;
 static const char* the_exe;
 
-int load_executable(struct fd* f, struct entry* ans, const char* exe, const char** argv, const char** envp)
+int load_executable(struct file* fs, struct fd* f, struct entry* ans, const char* exe, const char** argv, const char** envp)
 {
     unsigned int last_addr;
+    unsigned int phdr_addr;
     unsigned int phnum;
-    unsigned int entry = load_elf(f, &last_addr, &phnum);
+    unsigned int at_base = 0;
+    memmap_log(0xbf800000u, 0xc0000000u, 1, "stack", 0);
+    map_range(0xbf800000u, 0xc0000000u, 1); //stack
+    char interp[256];
+    unsigned int main_base;
+    unsigned int entry = load_elf(f, &last_addr, &phdr_addr, &phnum, &main_base, interp, 256);
+    unsigned int at_entry = entry;
     debug_puts("entry = 0x");
     debug_putn(entry, 16);
+    debug_puts(", base = 0x");
+    debug_putn(main_base, 16);
     debug_putc('\n');
     if(!entry)
         return -ENOEXEC;
+    if(*interp)
+    {
+        debug_puts("dynamic executable!\n");
+        struct fd dyld;
+        int status = fs_open(&dyld, fs, interp, 0);
+        if(status)
+        {
+            debug_puts("load_executable: fs_open(dyld) failed: ");
+            debug_putns(status, 10);
+            debug_puts("\n");
+            return status;
+        }
+        unsigned int dyld_la, dyld_pa;
+        entry = load_elf(&dyld, &dyld_la, &dyld_pa, 0, &at_base, 0, 0);
+        debug_puts("at_base = 0x");
+        debug_putn(at_base, 16);
+        debug_putc('\n');
+        if(!entry)
+            return -ENOEXEC;
+    }
     the_exe = exe;
     cur_brk = orig_brk = (last_addr + 0x2000fffu) & ~4095u;
-    map_range(0xbf800000, 0xc0000000, 1); //stack
     for(volatile unsigned int* p = (volatile unsigned int*)0xbf800000; p < (volatile unsigned int*)0xc0000000; p++)
         *p = 0;
     unsigned int esp = 0xc0000000;
@@ -56,6 +86,7 @@ int load_executable(struct fd* f, struct entry* ans, const char* exe, const char
         esp -= 4;
     esp -= 4; //null
     esp -= 4; //argc
+    esp &= ~15u; // required by cdecl
     unsigned int* esp_out = (unsigned int*)esp;
     char* strp_out = (char*)strp;
     for(*esp_out = 0; argv[*esp_out]; ++*esp_out);
@@ -84,17 +115,17 @@ int load_executable(struct fd* f, struct entry* ans, const char* exe, const char
     *esp_out++ = AT_CLKTCK;
     *esp_out++ = 100;
     *esp_out++ = AT_PHDR;
-    *esp_out++ = (unsigned int)last_addr;
+    *esp_out++ = (unsigned int)phdr_addr;
     *esp_out++ = AT_PHENT;
     *esp_out++ = 32;
     *esp_out++ = AT_PHNUM;
     *esp_out++ = phnum;
     *esp_out++ = AT_BASE;
-    *esp_out++ = 0; //only static executables are supported as of now
+    *esp_out++ = at_base;
     *esp_out++ = AT_FLAGS;
     *esp_out++ = 0;
     *esp_out++ = AT_ENTRY;
-    *esp_out++ = (unsigned int)entry;
+    *esp_out++ = (unsigned int)at_entry;
     *esp_out++ = AT_UID;
     *esp_out++ = 179;
     *esp_out++ = AT_EUID;
@@ -147,6 +178,7 @@ unsigned int brk(unsigned int x)
     {
         if(check_access(old, new, -1) != new)
             return cur_brk;
+        memmap_log(old, new, 1, "heap", 0);
         map_range(old, new, 1);
         for(volatile unsigned int* p = (volatile unsigned int*)old; p < (volatile unsigned int*)new; p++)
             *p = 0;
@@ -161,27 +193,29 @@ unsigned int brk(unsigned int x)
 
 void kernel_page_fault()
 {
+    done(-11); // report error on all tests
     debug_puts("FATAL: in-kernel page fault!\n");
+    memmap_print(); // hope it doesn't crash the kernel again
     asm volatile("cli\nhlt");
     while(1);
 }
 
-static int do_find_mmap(unsigned int sz)
+unsigned int do_find_mmap(unsigned int sz, unsigned int upperlimit)
 {
-    unsigned int back_end = 0xbf700000u;
+    unsigned int back_end = upperlimit;
     while(back_end > 0x100000u)
     {
         if(sz >= 0x7fff000) //need at least 1 empty pgdir
         {
-            unsigned int empty_pgdir = check_access_backwards(0x100000u, back_end, -2) + 4096u;
-            back_end = check_access(empty_pgdir, 0xbf700000u, -1);
+            unsigned int empty_pgdir = check_access_backwards(0x100000u, back_end-4096u, -2) + 4096u;
+            back_end = check_access(empty_pgdir, upperlimit, -1);
         }
         else
-            back_end = check_access_backwards(0x100000u, back_end, 0) + 4096u;
-        unsigned int front_end = check_access_backwards(0x100000u, back_end, -1) + 4096u;
+            back_end = check_access_backwards(0x100000u, back_end-4096u, 0) + 4096u;
+        unsigned int front_end = check_access_backwards(0x100000u, back_end-4096u, -1) + 4096u;
         if(back_end - front_end >= sz)
             return back_end - sz;
-        front_end = back_end;
+        back_end = front_end;
     }
     return 0;
 }
@@ -191,7 +225,7 @@ unsigned int find_mmap(unsigned int addr, unsigned int sz)
     if(addr < 0x100000
     || addr + (unsigned long long)sz > 0xc0000000ull
     || check_access(addr, addr+sz, -1) < addr+sz)
-        return do_find_mmap(sz);
+        return do_find_mmap(sz, 0x80000000u);
     return addr;
 }
 

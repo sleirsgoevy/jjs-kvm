@@ -9,6 +9,7 @@
 #include "debugout.h"
 #include "alloc.h"
 #include "timer.h"
+#include "memmap.h"
 #include <signal.h>
 #include <errno.h>
 #include <sys/syscall.h>
@@ -55,9 +56,13 @@ static syscall_t* syscalls[] = {
     [__NR_gettid] = sys_gettid,
     [__NR_access] = sys_access,
     [__NR_fstat64] = sys_fstat64,
+    [__NR_stat64] = sys_stat64,
+    [__NR_mprotect] = sys_mprotect,
     [__NR_mremap] = sys_mremap,
     [__NR_munmap] = sys_munmap,
-    [__NR__llseek] = sys_llseek
+    [__NR__llseek] = sys_llseek,
+    [__NR_open] = sys_open,
+    [__NR_openat] = sys_openat
 };
 
 int main_loop(unsigned long long tl_arg)
@@ -83,13 +88,16 @@ int main_loop(unsigned long long tl_arg)
         switch(userspace.exit_reason)
         {
         case 0x0e: //page fault
+        {
+            unsigned int fault_addr;
+            asm volatile("mov %%cr2, %0":"=r"(fault_addr));
             debug_puts("main_loop(): page fault in userspace (errorcode=0x");
             debug_putn(userspace.errorcode, 16);
+            debug_puts(", faultaddr=0x");
+            debug_putn(fault_addr, 16);
             debug_puts(")\n");
             if(userspace.errorcode == 7) // probably CoW
             {
-                unsigned int fault_addr;
-                asm volatile("mov %%cr2, %0":"=r"(fault_addr));
                 fault_addr &= ~4095u;
                 unsigned int cowed = cow_range(fault_addr, fault_addr+4096u);
                 if(cowed > 1)
@@ -97,7 +105,9 @@ int main_loop(unsigned long long tl_arg)
                 else if(cowed == 1)
                     continue;
             }
+            memmap_print();
             return -SIGSEGV;
+        }
         case 0x80: //syscall
         {
             unsigned int syscall_no = userspace.gp_regs[GP_REG_EAX];
@@ -141,14 +151,18 @@ int main_loop(unsigned long long tl_arg)
             userspace.gp_regs[GP_REG_EAX] = ans;
             continue;
         }
-        case 0x68:
+        case 0x06: //invalid opcode
+            return -SIGILL;
+        case 0x00: //division by zero
+            return -SIGFPE;
+        case 0x68: //timer interrupt
             asm volatile("outb %%al, $0x20"::"a"(0x20));
             break;
         default: //unknown
             debug_puts("main_loop(): unknown exit_reason 0x");
             debug_putn(userspace.exit_reason, 16);
             debug_puts(", terminating\n");
-            return -SIGILL;
+            return BAILOUT; //most probably some unknown CPU exception
         }
     }
 }
