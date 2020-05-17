@@ -192,8 +192,10 @@ static int unmap_pgdir(unsigned int* pgdir, unsigned int base, unsigned int from
     {
         if(pgdir[i])
         {
-            if(!(pgdir[i] & 1024))
+            if(!(pgdir[i] & 1024u))
                 highmem_free((void*)((base+i)<<12), pgdir[i] & ~4095u);
+            else
+                highmem_increment_ml();
             pgdir[i] = 0;
             invlpg((base+i)<<12);
         }
@@ -263,6 +265,7 @@ static unsigned int cow_pgdir(unsigned int* pgdir, unsigned int base, unsigned i
             static unsigned int page[1024];
             for(int j = 0; j < 1024; j++)
                 page[j] = pg[j];
+            highmem_increment_ml();
             unsigned int new_page = highmem_pre_alloc();
             pgdir[i] = new_page | 7;
             invlpg((base+i)<<12);

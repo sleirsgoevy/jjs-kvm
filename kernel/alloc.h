@@ -30,4 +30,7 @@ void highmem_post_alloc(void* page);
 //deallocate highmem page
 void highmem_free(void* virt, unsigned int phys);
 
+//used by CoW-related code for fake deallocation of backing pages
+void highmem_increment_ml();
+
 void set_ml(unsigned int new_ml);

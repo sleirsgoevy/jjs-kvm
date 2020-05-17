@@ -72,6 +72,12 @@ void highmem_free(void* virt, unsigned int phys)
     }
 }
 
+void highmem_increment_ml()
+{
+    if(ml != ML_EXCEEDED)
+        ml++;
+}
+
 void set_ml(unsigned int new_ml)
 {
     if(ml_orig - ml > new_ml)
