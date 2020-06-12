@@ -33,11 +33,20 @@ void wait_for_interrupt(unsigned int which)
 void init_timer()
 {
 #define outb(to, from) asm volatile("outb %%al, $"#to"\n.byte 0xeb, 0, 0xeb, 0"::"a"(from))
+    // PIC & PIT setup copy-pasted from SeaBIOS
+    // allows jumping to jjs-kvm straight after CPU reset
     outb(0x20, 0x11);
+    outb(0xa0, 0x11);
     outb(0x21, 0x68);
+    outb(0xa1, 0x70);
     outb(0x21, 4);
-    outb(0x21, 2);
+    outb(0xa1, 2);
+    outb(0x21, 1);
+    outb(0xa1, 1);
     outb(0x21, 0xfe);
+    outb(0x43, 0x34);
+    outb(0x40, 0);
+    outb(0x40, 0);
 #undef outb
     unsigned long long counter = 0;
     for(int i = 0; i < 10; i++)

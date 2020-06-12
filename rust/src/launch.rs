@@ -1,174 +1,68 @@
 use crate::bundle;
-use nix::sys::wait::waitpid;
-use nix::unistd::close;
-use nix::unistd::dup2;
-use nix::unistd::execvp;
-use nix::unistd::pipe;
+use crate::error;
 use nix::Error;
-use std::ffi;
-use std::fs;
-use std::io::Read;
-use std::io::Seek;
-use std::io::Write;
-use std::os::unix::io::FromRawFd;
-use std::os::unix::io::IntoRawFd;
 use std::result::Result;
 use std::vec::Vec;
 
-/*
-extern {
-    fn memfd_create(name: *const u8, flags: i32) -> i32;
-    fn pipe(fds: &mut PipeFds) -> i32;
-    fn dup(fd: i32) -> i32;
-    fn dup2(fd1: i32, fd2: i32) -> i32;
-    fn close(fd: i32);
-    #[allow(deprecated)]
-    fn fork() -> std::os::unix::raw::pid_t;
-    fn execvp(name: *const u8, args: *const *const u8);
-    #[allow(deprecated)]
-    fn waitpid(pid: std::os::unix::raw::pid_t, status: &mut i32, flags: i32) -> std::os::unix::raw::pid_t;
-}*/
+extern crate kvm_bindings;
+extern crate kvm_ioctls;
+extern crate memmap;
 
-const ERR_OTHER: i32 = 0xbeef;
-
-fn do_run(bundle: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), Error> {
-    let mut stubs = Vec::<i32>::new();
-    for i in 0..5 {
-        let x = nix::unistd::dup(i)?;
-        stubs.push(x);
-    }
-
-    let memfd = unsafe {
-        let raws = ffi::CString::new("bundle.bin").unwrap();
-        let mfd = nix::sys::memfd::memfd_create(
-            &raws,
-            nix::sys::memfd::MemFdCreateFlag::MFD_ALLOW_SEALING,
-        )?;
-        let mut f = fs::File::from_raw_fd(mfd);
-        f.write(&bundle).unwrap();
-        f.flush().unwrap();
-        f.seek(std::io::SeekFrom::Start(0)).unwrap();
-        f.into_raw_fd()
-    };
-    let (fd0, monitor_in) = pipe()?;
-    let fd1 = fs::File::open("/dev/null").unwrap().into_raw_fd();
-    let (done_fd, fd3) = pipe()?;
-    let fd4 = memfd;
-    let (bundle_out, fd5) = pipe()?;
-    let fork_result = nix::unistd::fork()?;
-    let pid = match fork_result {
-        nix::unistd::ForkResult::Child => {
-            dup2(fd0, 0)?;
-            dup2(fd1, 1)?;
-            dup2(fd3, 3)?;
-            dup2(fd4, 4)?;
-            dup2(fd5, 5)?;
-
-            let dist_dir = match std::env::var("DIST_DIR") {
-                Ok(s) => s,
-                Err(_) => {
-                    let mut p = std::env::current_exe().unwrap();
-                    p.pop();
-                    p.to_str().unwrap().to_string()
-                }
-            };
-            std::env::set_current_dir("/").unwrap();
-            let fmt1 = format!("file={}/rmboot.img,format=raw", dist_dir);
-            let fmt2 = format!("loader,file={}/kernel.elf", dist_dir);
-            let mut args = vec![
-                "qemu-system-i386",
-                "-m",
-                "4096",
-                "-enable-kvm",
-                "-drive",
-                fmt1.as_str(),
-                "-device",
-                "loader,file=/dev/fd/4,addr=0x1000000,force-raw=on",
-                "-device",
-                fmt2.as_str(),
-                "-debugcon",
-                "file:/dev/fd/3",
-                "-monitor",
-                "stdio",
-                "-nographic",
-                "-serial",
-                "null",
-                "-s",
-            ];
-            #[allow(unused_mut)]
-            let mut fmt3: String;
-            if std::path::Path::new(&format!("{}/bios.bin", dist_dir)).exists() {
-                args.push("-bios");
-                fmt3 = format!("{}/bios.bin", dist_dir);
-                args.push(fmt3.as_str());
-            }
-            let mut ffi_args = Vec::new();
-            for i in args {
-                ffi_args.push(Box::leak(ffi::CString::new(i).unwrap().into_boxed_c_str())
-                    as &'static std::ffi::CStr);
-            }
-            match execvp(&ffi::CString::new("qemu-system-i386").unwrap(), &ffi_args)
-                .expect("execvp() failed") {}
-        }
-        nix::unistd::ForkResult::Parent { child: pid } => pid,
-    };
-    for i in vec![fd0, fd1, fd3, fd4, fd5] {
-        close(i)?;
-    }
-    let mut b = Vec::<u8>::new();
-    {
-        let mut done_f: fs::File;
-        unsafe {
-            done_f = fs::File::from_raw_fd(done_fd);
-        }
-        loop {
-            let mut x = [0 as u8; 1];
-            if done_f.read(&mut x).unwrap() != 1 {
-                return Result::Err(Error::Sys(nix::errno::Errno::EINVAL));
-            }
-            b.push(x[0]);
-            if x[0] == ('\n' as u8) {
-                break;
-            }
-        }
-    }
-    let start_addr = 0xc1000000 as u32;
-    let cmd = format!(
-        "memsave 0x{:x} 0x{:x} ./dev/fd/5\nquit\n",
-        start_addr,
-        bundle.len()
-    );
-    let cmd = cmd.as_bytes();
-    {
-        let mut monitor_f: fs::File;
-        unsafe {
-            monitor_f = fs::File::from_raw_fd(monitor_in);
-        }
-        if monitor_f.write(&cmd).unwrap() != cmd.len() {
-            return Result::Err(Error::Sys(nix::errno::Errno::from_i32(ERR_OTHER)));
-        }
-    }
-    let mut bundle_out_f: fs::File;
+fn do_run(bundle: &mut [u8]) -> std::result::Result<std::vec::Vec<u8>, anyhow::Error> {
+    let kernel = std::include_bytes!("../../kernel.bin");
+    let kvm = kvm_ioctls::Kvm::new()?;
+    assert_eq!(kvm.get_api_version(), 12);
+    let vm = kvm.create_vm()?;
+    vm.create_irq_chip().unwrap();
+    vm.create_pit2(kvm_bindings::kvm_pit_config { flags: 0, pad: [0u32; 15] }).unwrap();
+    let mut memory = memmap::MmapMut::map_anon(0x40000000)?;
     unsafe {
-        bundle_out_f = fs::File::from_raw_fd(bundle_out);
-    }
-    let mut ans = Vec::<u8>::new();
-    bundle_out_f.read_to_end(&mut ans).unwrap();
-    let status = waitpid(pid, None)?;
-    match status {
-        nix::sys::wait::WaitStatus::Exited(_, code) => {
-            if code != 0 {
-                return Err(Error::Sys(nix::errno::Errno::from_i32(ERR_OTHER)));
-            }
-        }
-        _ => return Err(Error::Sys(nix::errno::Errno::from_i32(ERR_OTHER))),
-    }
-    Ok((b, ans))
+        vm.set_user_memory_region(kvm_bindings::kvm_userspace_memory_region { slot: 0, guest_phys_addr: 0x1000, memory_size: 0x40000000, userspace_addr: memory.as_ptr() as u64, flags: 0 })?;
+    };
+    memory[0..kernel.len()].copy_from_slice(kernel);
+    memory[0xfff000..0xfff000+bundle.len()].copy_from_slice(bundle);
+    let vcpu = vm.create_vcpu(0)?;
+    vcpu.set_cpuid2(&kvm.get_supported_cpuid(kvm_bindings::KVM_MAX_CPUID_ENTRIES)?)?;
+    let mut sregs = vcpu.get_sregs()?;
+    sregs.cr0 |= 1;
+    sregs.cs.base = 0;
+    sregs.cs.limit = 0xfffffu32;
+    sregs.cs.g = 1;
+    sregs.cs.db = 1;
+    sregs.ds.base = 0;
+    sregs.ds.limit = 0xfffffu32;
+    sregs.cs.g = 1;
+    sregs.cs.db = 1;
+    sregs.es = sregs.ds;
+    sregs.ss = sregs.ds;
+    vcpu.set_sregs(&sregs)?;
+    let mut regs = vcpu.get_regs()?;
+    regs.rip = 0x1000;
+    regs.rflags = 2;
+    vcpu.set_regs(&regs)?;
+    let mut output = std::vec::Vec::<u8>::new();
+    loop {
+        let q = vcpu.run()?;
+        match q {
+            kvm_ioctls::VcpuExit::IoOut(port, data) => {
+                if port != 0xe9 {
+                    (Err::<(), error::JjsKvmError>(error::JjsKvmError::new(&std::format!("output to port other than debug serial"))))?;
+                }
+                //std::io::stdout().write_all(&data)?;
+                output.extend(data);
+                if output.len() != 0 && output[output.len() - 1] == ('\n' as u8) {
+                    bundle.copy_from_slice(&memory[0xfff000..0xfff000+bundle.len()]);
+                    return Ok(output);
+                }
+            },
+            _ => (Err::<(), error::JjsKvmError>(error::JjsKvmError::new(&std::format!("unknown exit reason: {:?}", q))))?,
+        };
+    };
 }
 
 pub fn run(b: &mut bundle::Bundle) -> Result<(String, Vec<(u32, Vec<Vec<u8>>)>), Error> {
-    let data0 = b.dump();
-    let (status0, data) = do_run(data0.clone()).unwrap();
+    let mut data = b.dump().clone();
+    let status0 = do_run(&mut data).unwrap();
     let mut ans = Vec::<(u32, Vec<Vec<u8>>)>::new();
     let it = &mut b.tests.iter();
     it.next();

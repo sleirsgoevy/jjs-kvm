@@ -1,7 +1,7 @@
 dist: clean_dist
 	cd kernel; make dist
 	cp -r qemu/dist dist
-	cd rust; cargo build || exit; cp target/debug/jjs_kvm ../dist/
+	cd rust; touch src/launch.rs; cargo build --release || exit; cp target/release/jjs_kvm ../dist/
 	cp python/*.py dist/
 
 clean_dist:
