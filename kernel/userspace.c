@@ -10,7 +10,7 @@ static struct
     unsigned int gp_regs[8];
     unsigned int eflags;
     unsigned int esp;
-} kernelspace;
+} kernelspace __attribute__((used));
 
 static unsigned int tss[26];
 

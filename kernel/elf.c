@@ -4,13 +4,15 @@
 #include "vmem.h"
 #include "memmap.h"
 
-static void* memset(void* s, int c, unsigned int n)
+/*static void* memset(void* s, int c, unsigned int n)
 {
     char* buf = (char*)s;
     for(unsigned i = 0; i < n; i++)
         buf[i] = c;
     return s;
-}
+}*/
+
+void* memset(void* s, int c, unsigned int n);
 
 int validate_elf(struct elf_header* hdr)
 {

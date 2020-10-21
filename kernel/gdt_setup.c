@@ -2,7 +2,7 @@
 #include "gdt_setup.h"
 #include "userspace.h"
 
-asm("farret:\nretf $2");
+asm("farret:\nretf $0");
 
 void farret(unsigned int cs);
 
@@ -25,6 +25,6 @@ void setup_gdt()
     asm volatile("lgdt %0"::"m"(gdtr));
     unsigned int cs = SEL_CODE0;
     unsigned int ds = SEL_DATA0;
-    asm volatile("pushw $8\ncall farret");
-    asm volatile("mov %%bx, %%ds\nmov %%bx, %%es\nmov %%bx, %%ss"::"eax"(cs),"ebx"(ds));
+    asm volatile("pushl $8\ncall farret");
+    asm volatile("mov %%bx, %%ds\nmov %%bx, %%es\nmov %%bx, %%ss"::"a"(cs),"b"(ds));
 }

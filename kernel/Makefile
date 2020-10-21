@@ -1,14 +1,14 @@
 all: ../kernel.bin ../bundle.bin
 
 kernel.elf: *.c *.h
-	gcc $(CFLAGS) *.c -g -m32 -o kernel.elf -nostdlib -fno-plt -fno-pic -Wl,-N,-Ttext=0x2000,-Tdata=0x10000 -static -lgcc
+	gcc $(CFLAGS) *.c *.S -g -m32 -o kernel.elf -ffreestanding -no-pie -nostdlib -fno-plt -fno-pic -Wl,-N,-Ttext=0x2000,-Tdata=0x10000 -static -lgcc
 
 kernel.bin: kernel.elf
 	objcopy -O binary --only-section .text --only-section .rodata --only-section .data --only-section .bss kernel.elf kernel.bin
 
 release:
 	make clean
-	make CFLAGS=-DNDEBUG ../kernel.bin
+	make CFLAGS=-DNDEBUG\ -O3 ../kernel.bin
 
 dist: release
 	cd ../qemu; make dist

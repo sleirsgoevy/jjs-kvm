@@ -8,6 +8,9 @@
 #include <sys/mman.h>
 #include <errno.h>
 
+void* memset(void* s, int c, unsigned int n);
+void* memcpy(void* dst, void* src, unsigned int n);
+
 unsigned int sys_brk(unsigned int x, unsigned int _1, unsigned int _2, unsigned int _3, unsigned int _4)
 {
     return brk(x);
@@ -45,9 +48,10 @@ unsigned int sys_mmap2(unsigned int addr, unsigned int sz, unsigned int prot, un
     map_range(addr, addr + sz, (prot & PROT_WRITE)?1:0);
     if(!(prot & PROT_WRITE))
         set_rights(addr, addr + sz, 0);
-    volatile char* buf = (volatile char*)addr;
-    for(unsigned int i = 0; i < sz; i++) 
-        buf[i] = 0;
+    char* buf = (char*)addr;
+    memset(buf, 0, sz);
+    /*for(unsigned int i = 0; i < sz; i++) 
+        buf[i] = 0;*/
     if(!(flags & MAP_ANONYMOUS))
     {
         struct fd tmp = fds[fd];
@@ -94,8 +98,9 @@ unsigned int sys_mremap(unsigned int addr, unsigned int sz, unsigned int newsz, 
         unmap_range(addr, addr+sz);
         memmap_log(addr3+sz, addr3+newsz, (check_access(addr3, addr3+4096, 1)==addr3+4096)?1:0, "mremap", 0);
         map_range(addr3+sz, addr3+newsz, (check_access(addr3, addr3+4096, 1)==addr3+4096)?1:0);
-        for(unsigned int* p = (unsigned int*)(addr3+sz); p < (unsigned int*)(addr3+newsz); p++)
-            *p = 0;
+        memset((void*)(addr3+sz), 0, newsz-sz);
+        /*for(unsigned int* p = (unsigned int*)(addr3+sz); p < (unsigned int*)(addr3+newsz); p++)
+            *p = 0;*/
         return addr3;
     }
     else if(addr2 != addr)
@@ -108,8 +113,9 @@ unsigned int sys_mremap(unsigned int addr, unsigned int sz, unsigned int newsz, 
     }
     memmap_log(addr2+sz, addr2+newsz, (check_access(addr2, addr2+4096, 1)==addr2+4096)?1:0, "mremap", 0);
     map_range(addr2+sz, addr2+newsz, (check_access(addr2, addr2+4096, 1)==addr2+4096)?1:0);
-    for(unsigned int* p = (unsigned int*)(addr2+sz); p < (unsigned int*)(addr2+newsz); p++)
-        *p = 0;
+    memset((void*)(addr2+sz), 0, newsz-sz);
+    /*for(unsigned int* p = (unsigned int*)(addr2+sz); p < (unsigned int*)(addr2+newsz); p++)
+        *p = 0;*/
     return addr2;
 }
 

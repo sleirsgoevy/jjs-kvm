@@ -12,6 +12,8 @@ static unsigned int cur_brk;
 static unsigned int orig_brk;
 static const char* the_exe;
 
+void* memset(void* s, int c, unsigned int n);
+
 int load_executable(struct file* fs, struct fd* f, struct entry* ans, const char* exe, const char** argv, const char** envp)
 {
     unsigned int last_addr;
@@ -53,8 +55,9 @@ int load_executable(struct file* fs, struct fd* f, struct entry* ans, const char
     }
     the_exe = exe;
     cur_brk = orig_brk = (last_addr + 0x2000fffu) & ~4095u;
-    for(volatile unsigned int* p = (volatile unsigned int*)0xbf800000; p < (volatile unsigned int*)0xc0000000; p++)
-        *p = 0;
+    memset((void*)0xbf800000, 0, 0x800000);
+    /*for(unsigned int* p = (unsigned int*)0xbf800000; p < (unsigned int*)0xc0000000; p++)
+        *p = 0;*/
     unsigned int esp = 0xc0000000;
     //auxv strings
     esp -= 5; //"i686"
@@ -158,6 +161,7 @@ int load_executable(struct file* fs, struct fd* f, struct entry* ans, const char
     }
     ans->eip = entry;
     ans->esp = esp;
+    return 0;
 }
 
 void setup_entry_regs(struct entry* entry)
@@ -180,8 +184,9 @@ unsigned int brk(unsigned int x)
             return cur_brk;
         memmap_log(old, new, 1, "heap", 0);
         map_range(old, new, 1);
-        for(volatile unsigned int* p = (volatile unsigned int*)old; p < (volatile unsigned int*)new; p++)
-            *p = 0;
+        memset((void*)old, 0, new - old);
+        /*for(unsigned int* p = (unsigned int*)old; p < (unsigned int*)new; p++)
+            *p = 0;*/
         return cur_brk = x;
     }
     else if(new < old)

@@ -76,11 +76,11 @@ unsigned int sys_rt_sigprocmask(unsigned int how, unsigned int mask, unsigned in
     if(old)
     {
         do_cow((void*)old, 8);
-        *(volatile unsigned long long*)old = sigprocmask;
+        *(unsigned long long*)old = sigprocmask;
     }
     if(mask)
     {
-        volatile const unsigned long long* p = (volatile const unsigned long long*)mask;
+        const unsigned long long* p = (const unsigned long long*)mask;
         switch(how)
         {
         case SIG_SETMASK:

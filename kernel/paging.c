@@ -2,6 +2,9 @@
 #include "alloc.h"
 #include "debugout.h"
 
+void* memcpy(void* dst, const void* src, unsigned int cnt);
+void* memset(void* s, int c, unsigned int n);
+
 static unsigned int cr3;
 static unsigned int orig_cr3;
 
@@ -15,15 +18,17 @@ void init_paging()
 {
     unsigned int pgdir_addr = pop_page_low();
     unsigned int* pgdir = (unsigned int*)pgdir_addr;
-    for(int i = 1; i < 1024; i++)
-        pgdir[i] = 0;
+    memset(pgdir, 0, 4096);
+    /*for(int i = 1; i < 1024; i++)
+        pgdir[i] = 0;*/
     unsigned int pgtbl_addr = pop_page_low();
     unsigned int* pgtbl = (unsigned int*)pgtbl_addr;
     pgtbl[0] = 0;
     for(int i = 1; i < 256; i++)
         pgtbl[i] = (i << 12) | 0x103;
-    for(int i = 256; i < 1024; i++)
-        pgtbl[i] = 0;
+    memset(pgtbl + 256, 0, 3072);
+    /*for(int i = 256; i < 1024; i++)
+        pgtbl[i] = 0;*/
     pgdir[0] = pgtbl_addr | 7; // spans whole 4mb, so upper part can be used for userspace allocations
     int cntr = 0;
     for(int i = 768; i < 1024; i++)
@@ -101,22 +106,25 @@ static void invlpg(unsigned int addr)
 static unsigned int get_cow(unsigned int pgdir)
 {
     static unsigned int page[1024];
-    volatile unsigned int* pg;
+    unsigned int* pg;
     if(pgdir != 0)
     {
         if(!(pgdir & 1024u))
             return pgdir;
         pg = LINEAR(pgdir & ~4095u);
-        for(int i = 0; i < 1024; i++)
-            page[i] = pg[i];
+        memcpy(page, pg, 4096);
+        /*for(int i = 0; i < 1024; i++)
+            page[i] = pg[i];*/
     }
     else
-        for(int i = 0; i < 1024; i++)
-            page[i] = 0;
+        memset(page, 0, 4096);
+        /*for(int i = 0; i < 1024; i++)
+            page[i] = 0;*/
     pgdir = lowmem_alloc_page() | 7;
     pg = LINEAR(pgdir & ~4095u);
-    for(int i = 0; i < 1024; i++)
-        pg[i] = page[i];
+    memcpy(pg, page, 4096);
+    /*for(int i = 0; i < 1024; i++)
+        pg[i] = page[i];*/
     return pgdir;
 }
 
@@ -141,14 +149,16 @@ static unsigned int map_pgdir(unsigned int* pgdir, unsigned int base, unsigned i
         else if(pgdir[i] & 1024u)
         {
             static unsigned int page[1024];
-            volatile unsigned int* pg = (volatile unsigned int*)(pgdir[i] & ~4095u);
-            for(int i = 0; i < 1024; i++)
-                page[i] = pg[i];
+            unsigned int* pg = (unsigned int*)(pgdir[i] & ~4095u);
+            memcpy(page, pg, 4096);
+            /*for(int i = 0; i < 1024; i++)
+                page[i] = pg[i];*/
             pgdir[i] = highmem_pre_alloc() | (pgdir[i] & 0x9ffu) | (pgdir[i] & 512u) >> 8;
             invlpg((base+i)<<12);
             highmem_post_alloc((void*)((base+i)<<12));
-            for(int i = 0; i < 1024; i++)
-                pg[i] = page[i];
+            memcpy(pg, page, 4096);
+            /*for(int i = 0; i < 1024; i++)
+                pg[i] = page[i];*/
         }
         if(rw && !(pgdir[i] & 2))
         {
@@ -213,7 +223,7 @@ void unmap_range(unsigned int from, unsigned int to)
 {
     from >>= 12;
     to >>= 12;
-    for(unsigned int i = (from >> 10); i < ((to-1) >> 10); i++)
+    for(unsigned int i = (from >> 10); i <= ((to-1) >> 10); i++)
         if(LINEAR(cr3)[i] && unmap_pgdir(LINEAR((LINEAR(cr3)[i] = get_cow(LINEAR(cr3)[i])) & ~4095u), i << 10, from, to))
         {
             lowmem_free_page(LINEAR(cr3)[i] & ~4095u);
@@ -229,7 +239,7 @@ static void set_rights_pgdir(unsigned int* pgdir, unsigned int base, unsigned in
         to = base + 1024;
     from -= base;
     to -= base;
-    for(unsigned int i = from; i <= to; i++)
+    for(unsigned int i = from; i < to; i++)
         if(pgdir[i])
         {
             if(w)
@@ -243,7 +253,7 @@ void set_rights(unsigned int from, unsigned int to, int w)
 {
     from >>= 12;
     to >>= 12;
-    for(unsigned int i = (from >> 10); i < ((to-1) >> 10); i++)
+    for(unsigned int i = (from >> 10); i <= ((to-1) >> 10); i++)
         if(LINEAR(cr3)[i])
             set_rights_pgdir(LINEAR((LINEAR(cr3)[i] = get_cow(LINEAR(cr3)[i])) & ~4095u), i << 10, from, to, w);
 }
@@ -261,7 +271,7 @@ static unsigned int cow_pgdir(unsigned int* pgdir, unsigned int base, unsigned i
     {
         if(pgdir[i] & 512) // CoW bit
         {
-            volatile unsigned int* pg = (volatile unsigned int*)((base+i)<<12);
+            unsigned int* pg = (unsigned int*)((base+i)<<12);
             static unsigned int page[1024];
             for(int j = 0; j < 1024; j++)
                 page[j] = pg[j];

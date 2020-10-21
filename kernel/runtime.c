@@ -83,7 +83,10 @@ int main_loop(unsigned long long tl_arg)
         debug_putn(tl, 10);
         debug_putc('\n');
         if(tl < userspace.delta)
+        {
+            debug_puts("main_loop(): time limit exceeded\n");
             return TL;
+        }
         tl -= userspace.delta;
         switch(userspace.exit_reason)
         {
@@ -95,6 +98,8 @@ int main_loop(unsigned long long tl_arg)
             debug_putn(userspace.errorcode, 16);
             debug_puts(", faultaddr=0x");
             debug_putn(fault_addr, 16);
+            debug_puts(", eip=0x");
+            debug_putn(userspace.eip, 16);
             debug_puts(")\n");
             if(userspace.errorcode == 7) // probably CoW
             {
@@ -143,7 +148,10 @@ int main_loop(unsigned long long tl_arg)
             debug_putns((int)ans, 10);
             debug_putc('\n');
             if(ml == ML_EXCEEDED)
+            {
+                debug_puts("main_loop(): memory limit exceeded\n");
                 return ML;
+            }
             if(ans == -ENOSYS)
                 return BAILOUT;
             if(ans == -ERESTART)
